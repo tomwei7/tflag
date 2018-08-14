@@ -1,6 +1,7 @@
 package tflag
 
 import (
+	"flag"
 	"testing"
 	"time"
 
@@ -15,6 +16,8 @@ type slot struct {
 type mock struct {
 	data map[string]slot
 }
+
+func (m *mock) Var(p flag.Value, name string, usage string) {}
 
 func (m *mock) IntVar(p *int, name string, value int, usage string) {
 	m.data[name] = slot{usage: usage, value: value}

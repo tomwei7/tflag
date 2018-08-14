@@ -34,6 +34,7 @@ func VarFlagSet(fs *flag.FlagSet, namespace string, v interface{}) (ParseFunc, e
 }
 
 type flager interface {
+	Var(p flag.Value, name string, usage string)
 	IntVar(p *int, name string, value int, usage string)
 	BoolVar(p *bool, name string, value bool, usage string)
 	UintVar(p *uint, name string, value uint, usage string)
@@ -45,6 +46,10 @@ type flager interface {
 }
 
 type defaultFlager struct{}
+
+func (defaultFlager) Var(p flag.Value, name string, usage string) {
+	flag.Var(p, name, usage)
+}
 
 func (defaultFlager) IntVar(p *int, name string, value int, usage string) {
 	flag.IntVar(p, name, value, usage)
@@ -179,7 +184,81 @@ func (v *varState) setFlag(prefix string, rv reflect.Value, opt tagOpt) (err err
 }
 
 func (v *varState) setSliceFlag(prefix string, rv reflect.Value, opt tagOpt) (err error) {
+	var fs flagSet
+	v.f.Var(&fs, prefix+opt.flag, opt.usage)
+	v.pfs = append(v.pfs, func() error {
+		var setFn func(flagSet, reflect.Value) error
+		switch rv.Elem().Kind() {
+		case reflect.Bool:
+			setFn = setBoolSlice
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			setFn = setInt64Slice
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			setFn = setUint64Slice
+		case reflect.Float32, reflect.Float64:
+			setFn = setFloat64Slice
+		default:
+			return fmt.Errorf("unsupport type %s, only support base type e.g. string, bool, int", rv.Elem().Kind())
+		}
+		v := reflect.MakeSlice(rv.Type(), len(fs), len(fs))
+		if err := setFn(fs, v); err != nil {
+			return err
+		}
+		rv.Set(v)
+		return nil
+	})
 	return
+}
+
+func setStringSlice(fs flagSet, v reflect.Value) error {
+	for i, s := range fs {
+		v.Index(i).SetString(s)
+	}
+	return nil
+}
+
+func setInt64Slice(fs flagSet, v reflect.Value) error {
+	for i, s := range fs {
+		x, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return err
+		}
+		v.Index(i).SetInt(x)
+	}
+	return nil
+}
+
+func setUint64Slice(fs flagSet, v reflect.Value) error {
+	for i, s := range fs {
+		x, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return err
+		}
+		v.Index(i).SetUint(x)
+	}
+	return nil
+}
+
+func setFloat64Slice(fs flagSet, v reflect.Value) error {
+	for i, s := range fs {
+		x, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return err
+		}
+		v.Index(i).SetFloat(x)
+	}
+	return nil
+}
+
+func setBoolSlice(fs flagSet, v reflect.Value) error {
+	for i, s := range fs {
+		x, err := strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+		v.Index(i).SetBool(x)
+	}
+	return nil
 }
 
 func (v *varState) setIntFlag(prefix string, rv reflect.Value, opt tagOpt) (err error) {

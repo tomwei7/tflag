@@ -43,4 +43,6 @@ func main() {
 
 ### TODO
 
-- [ ] slice, array support
+- [x] support slice, 
+- [ ] unitest
+- [ ] support array
